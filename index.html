@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>יופינדר - מחפש סרטוני יוטיוב מוסתרים!</title>
+    <title>יופינדר - מחפש סרטוני יוטיוב מוסתרים! 🕵️‍♂️</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Heebo:wght@400;700&display=swap');
@@ -114,13 +114,13 @@
         const qaButton = document.getElementById('qaButton');
         const qaModal = document.getElementById('qaModal');
         const closeModal = document.getElementById('closeModal');
-       
+        
         searchButton.addEventListener('click', async () => {
             const videoUrl = videoUrlInput.value.trim();
             messageContainer.classList.add('hidden');
             messageContainer.innerHTML = '';
 
-            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})/;
+            const regex = /(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=|shorts\/)|youtu\.be\/)([^"&?\/\s]{11})/;
             const match = videoUrl.match(regex);
 
             if (!match || !match[1]) {
@@ -130,52 +130,73 @@
 
             showMessage('<div class="flex justify-center"><div class="loader"></div></div>', 'text-gray-400');
             
-            const fullYouTubeUrl = `https://www.youtube.com/watch?v=${match[1]}`;
-            const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(`https://web.archive.org/cdx/search/cdx?url=${fullYouTubeUrl}&output=json`);
-
+            const videoId = match[1];
+            const fullYouTubeUrl = `https://www.youtube.com/watch?v=${videoId}`;
+            
+            let oldestWebpageUrl = null;
+            
+            // Try with the original URL first (e.g., shorts URL)
             try {
+                const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(`https://web.archive.org/cdx/search/cdx?url=${videoUrl}&output=json`);
                 const response = await fetch(proxyUrl);
                 const data = await response.json();
 
-                if (!Array.isArray(data) || data.length <= 1) {
-                    showMessage('הסרטון לא נמצא, לצערנו! 😭', 'text-yellow-400');
-                    const recommendation = document.createElement('p');
-                    recommendation.className = 'text-xs mt-2 text-gray-500';
-                    recommendation.innerHTML = 'מומלץ בחום לבדוק בעצמך ב-Wayback Machine';
-                    messageContainer.appendChild(recommendation);
-                    return;
-                }
-                
-                let oldestWebpageUrl = null;
-                let oldestTimestamp = Infinity;
-
-                for (const entry of data.slice(1)) {
-                    const originalUrl = entry[2];
-                    const timestamp = parseInt(entry[1]);
-                    const mimetype = entry[3];
-                    
-                    if (mimetype.includes('text/html')) {
-                        if (timestamp < oldestTimestamp) {
-                            oldestTimestamp = timestamp;
-                            oldestWebpageUrl = `https://web.archive.org/web/${oldestTimestamp}/${originalUrl}`;
+                if (Array.isArray(data) && data.length > 1) {
+                    let oldestTimestamp = Infinity;
+                    for (const entry of data.slice(1)) {
+                        const originalUrl = entry[2];
+                        const timestamp = parseInt(entry[1]);
+                        const mimetype = entry[3];
+                        
+                        if (mimetype.includes('text/html')) {
+                            if (timestamp < oldestTimestamp) {
+                                oldestTimestamp = timestamp;
+                                oldestWebpageUrl = `https://web.archive.org/web/${oldestTimestamp}/${originalUrl}`;
+                            }
                         }
                     }
                 }
-                
-                if (oldestWebpageUrl) {
-                    let message = `🎉 מצאתי את הסרטון ותוכל <a href="${oldestWebpageUrl}" target="_blank" class="text-[#58a6ff] hover:underline">לראות אותו פה</a>`;
-                    message += `<p class="text-xs mt-2 text-gray-500">שימו לב כנראה שהסרטון לא יעבוד בדף!</p>`;
-                    showMessage(message, 'text-green-500');
-                } else {
-                    showMessage('הסרטון לא נמצא, לצערנו! 😭', 'text-yellow-400');
-                    const recommendation = document.createElement('p');
-                    recommendation.className = 'text-xs mt-2 text-gray-500';
-                    recommendation.innerHTML = 'מומלץ בחום לבדוק בעצמך ב-Wayback Machine';
-                    messageContainer.appendChild(recommendation);
-                }
             } catch (err) {
-                console.error(err);
-                showMessage('יש בעיה בשרתים! אנא נסה שוב מאוחר יותר... 😔', 'text-red-500');
+                console.error('Error with original URL search:', err);
+            }
+
+            // If not found with original URL, try with the canonical watch?v= URL
+            if (!oldestWebpageUrl) {
+                try {
+                    const proxyUrl = `https://corsproxy.io/?` + encodeURIComponent(`https://web.archive.org/cdx/search/cdx?url=${fullYouTubeUrl}&output=json`);
+                    const response = await fetch(proxyUrl);
+                    const data = await response.json();
+
+                    if (Array.isArray(data) && data.length > 1) {
+                        let oldestTimestamp = Infinity;
+                        for (const entry of data.slice(1)) {
+                            const originalUrl = entry[2];
+                            const timestamp = parseInt(entry[1]);
+                            const mimetype = entry[3];
+                            
+                            if (mimetype.includes('text/html')) {
+                                if (timestamp < oldestTimestamp) {
+                                    oldestTimestamp = timestamp;
+                                    oldestWebpageUrl = `https://web.archive.org/web/${oldestTimestamp}/${originalUrl}`;
+                                }
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error with canonical URL search:', err);
+                }
+            }
+            
+            if (oldestWebpageUrl) {
+                let message = `🎉 מצאתי את הסרטון ותוכל <a href="${oldestWebpageUrl}" target="_blank" class="text-[#58a6ff] hover:underline">לראות אותו פה</a>`;
+                message += `<p class="text-xs mt-2 text-gray-500">שימו לב כנראה שהסרטון לא יעבוד בדף!</p>`;
+                showMessage(message, 'text-green-500');
+            } else {
+                showMessage('הסרטון לא נמצא, לצערנו! 😭', 'text-yellow-400');
+                const recommendation = document.createElement('p');
+                recommendation.className = 'text-xs mt-2 text-gray-500';
+                recommendation.innerHTML = 'מומלץ בחום לבדוק בעצמך ב-Wayback Machine';
+                messageContainer.appendChild(recommendation);
             }
         });
 
